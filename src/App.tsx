@@ -60,6 +60,17 @@ export default function App() {
           return
         }
         audio.srcObject = stream
+        // Minimize WebRTC playout buffering for live microphone monitoring.
+        // These hints are best-effort; browsers may ignore unsupported properties.
+        const pc = (call as MediaConnection & { peerConnection?: RTCPeerConnection }).peerConnection
+        pc?.getReceivers().forEach(receiver => {
+          const lowLatencyReceiver = receiver as RTCRtpReceiver & {
+            playoutDelayHint?: number
+            jitterBufferTarget?: number
+          }
+          if ('playoutDelayHint' in lowLatencyReceiver) lowLatencyReceiver.playoutDelayHint = 0
+          if ('jitterBufferTarget' in lowLatencyReceiver) lowLatencyReceiver.jitterBufferTarget = 0
+        })
         audio.muted = false
         audio.volume = Math.max(0, Math.min(1, volume / 100))
         setConnected(true)
@@ -100,7 +111,7 @@ export default function App() {
   async function startMic() {
     try {
       setError('')
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false }, video: false })
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false, latency: { ideal: 0.01 }, channelCount: { ideal: 1 }, sampleRate: { ideal: 48000 } }, video: false })
       streamRef.current = stream
       const peer = peerRef.current
       if (!peer || !joinId) throw new Error('Koneksi belum siap. Muat ulang halaman.')
