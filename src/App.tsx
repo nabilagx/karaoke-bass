@@ -31,7 +31,7 @@ export default function App() {
   const gainRef = useRef<GainNode | null>(null)
 
   useEffect(() => {
-    const peer = new Peer(undefined, {
+    const peer = new Peer('', {
       debug: 2,
       config: {
         iceServers: [
