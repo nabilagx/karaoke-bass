@@ -52,27 +52,27 @@ export default function App() {
       setStatus('Panggilan dari HP diterima, menyiapkan audio…')
       call.answer()
       call.on('stream', stream => {
-        if (audioRef.current) {
-          // Build the output chain only after the incoming microphone stream exists.
-          const ctx = new AudioContext({ latencyHint: 'interactive' })
-          const source = ctx.createMediaStreamSource(stream)
-          const low = ctx.createBiquadFilter()
-          low.type = 'lowshelf'; low.frequency.value = 120; low.gain.value = bass
-          const gain = ctx.createGain()
-          gain.gain.value = volume / 100
-          source.connect(low).connect(gain).connect(ctx.destination)
-          ctxRef.current = ctx; bassRef.current = low; gainRef.current = gain
-          ctx.onstatechange = () => {
-            const running = ctx.state === 'running'
-            setOutputReady(running)
-            setStatus(running ? 'Mic HP terhubung — audio aktif' : 'Mic terhubung — klik ENABLE AUDIO')
-          }
-          setConnected(true)
-          setOutputReady(ctx.state === 'running')
-          setStatus(ctx.state === 'running' ? 'Mic HP terhubung — audio aktif' : 'Mic terhubung — klik ENABLE AUDIO')
-          // If the user enabled output before the stream arrived, resume this new context too.
-          if (outputReadyRef.current) void ctx.resume()
+        // First prove the incoming WebRTC stream can play through the browser's native audio element.
+        // Bypass Web Audio filters until raw microphone playback is confirmed.
+        const audio = audioRef.current
+        if (!audio) {
+          setError('Elemen output audio tidak ditemukan di halaman laptop.')
+          return
         }
+        audio.srcObject = stream
+        audio.muted = false
+        audio.volume = Math.max(0, Math.min(1, volume / 100))
+        setConnected(true)
+        setStatus('Stream mikrofon diterima — menyalakan speaker…')
+        audio.play().then(() => {
+          setOutputReady(true)
+          setStatus('SUARA HP DITERIMA — AUDIO AKTIF')
+          setError('')
+        }).catch(err => {
+          setOutputReady(false)
+          setStatus('Stream diterima — browser menahan pemutaran')
+          setError('Browser laptop menahan audio: ' + err.message + '. Klik ENABLE AUDIO.')
+        })
       })
       call.on('close', () => { setConnected(false); setStatus('Mic terputus') })
       call.on('error', err => { setError('Streaming mic gagal: ' + err.message); setConnected(false); setStatus('Streaming gagal') })
@@ -95,7 +95,7 @@ export default function App() {
   }, [])
 
   useEffect(() => { if (bassRef.current) bassRef.current.gain.value = bass }, [bass])
-  useEffect(() => { if (gainRef.current) gainRef.current.gain.value = volume / 100 }, [volume])
+  useEffect(() => { if (gainRef.current) gainRef.current.gain.value = volume / 100; if (audioRef.current) audioRef.current.volume = Math.max(0, Math.min(1, volume / 100)) }, [volume])
 
   async function startMic() {
     try {
@@ -156,23 +156,22 @@ export default function App() {
     streamRef.current = null; setMicOn(false); setConnected(false); setStatus('Mic dimatikan')
   }
   async function enableOutput() {
-    const ctx = ctxRef.current
-    if (!ctx) {
-      outputReadyRef.current = true
+    const audio = audioRef.current
+    if (!audio?.srcObject) {
       setOutputReady(false)
-      setError('Stream mikrofon belum diterima. Coba matikan lalu nyalakan mic HP.')
+      setError('Belum ada stream mikrofon dari HP. Pastikan mic HP menyala dan status laptop sudah PHONE CONNECTED.')
       return
     }
     try {
-      await ctx.resume()
-      outputReadyRef.current = ctx.state === 'running'
-      setOutputReady(outputReadyRef.current)
-      setError(outputReadyRef.current ? '' : 'Browser belum mengaktifkan audio. Klik ENABLE AUDIO sekali lagi.')
-      setStatus(outputReadyRef.current ? 'Audio output aktif — tes bicara dari HP' : 'Audio masih tertahan browser')
+      audio.muted = false
+      audio.volume = Math.max(0, Math.min(1, volume / 100))
+      await audio.play()
+      setOutputReady(true)
+      setError('')
+      setStatus('SUARA HP DITERIMA — AUDIO AKTIF')
     } catch (e) {
-      outputReadyRef.current = false
       setOutputReady(false)
-      setError('Gagal mengaktifkan output audio: ' + (e instanceof Error ? e.message : 'Browser menolak audio'))
+      setError('Browser masih menahan pemutaran: ' + (e instanceof Error ? e.message : 'gagal memutar audio'))
     }
   }
   function copyLink() {
@@ -230,6 +229,6 @@ export default function App() {
       </section>
     </div>
     <footer className="bottom"><span>MADE FOR LOUD NIGHTS.</span><span><WifiOff size={13}/> AUDIO STREAM VIA WEBRTC</span></footer>
-    <audio ref={audioRef} autoPlay playsInline/>
+    <audio ref={audioRef} autoPlay playsInline controls/>
   </main>
 }
