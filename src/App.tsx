@@ -48,6 +48,7 @@ export default function App() {
       if (!isPhone) setConnected(false)
     })
     peer.on('call', call => {
+      setStatus('Panggilan dari HP diterima, menyiapkan audio…')
       call.answer()
       call.on('stream', stream => {
         if (audioRef.current) {
@@ -93,13 +94,44 @@ export default function App() {
       const call = peer.call(joinId, stream)
       if (!call) throw new Error('Gagal memulai panggilan.')
       callRef.current = call
-      setMicOn(true); setStatus('Menghubungkan ke laptop…')
+      setMicOn(true); setStatus('Panggilan terkirim. Menunggu laptop…')
+      const pc = (call as MediaConnection & { peerConnection?: RTCPeerConnection }).peerConnection
+      if (pc) {
+        const updateConnectionState = () => {
+          const ice = pc.iceConnectionState
+          const connection = pc.connectionState
+          if (ice === 'connected' || ice === 'completed' || connection === 'connected') {
+            setConnected(true)
+            setStatus('Jalur audio tersambung, menunggu suara…')
+          } else if (ice === 'failed' || connection === 'failed') {
+            setConnected(false)
+            setMicOn(false)
+            setStatus('Koneksi WebRTC gagal')
+            setError('Laptop menerima/tidak menerima jalur audio. Coba refresh kedua perangkat lalu scan QR baru.')
+          } else if (ice === 'disconnected' || connection === 'disconnected') {
+            setStatus('Jaringan terputus, mencoba menyambung…')
+          } else {
+            setStatus('Membangun jalur audio: ' + ice)
+          }
+        }
+        pc.addEventListener('iceconnectionstatechange', updateConnectionState)
+        pc.addEventListener('connectionstatechange', updateConnectionState)
+        updateConnectionState()
+      }
+      const connectTimeout = window.setTimeout(() => {
+        if (!pc || (pc.iceConnectionState !== 'connected' && pc.iceConnectionState !== 'completed')) {
+          setError('Belum tersambung setelah 15 detik. Periksa status laptop: apakah muncul PANGGILAN DARI HP?')
+          setStatus('Koneksi masih tertahan')
+        }
+      }, 15000)
       call.on('close', () => {
+        window.clearTimeout(connectTimeout)
         streamRef.current?.getTracks().forEach(track => track.stop())
         streamRef.current = null
         setMicOn(false); setConnected(false); setStatus('Koneksi berakhir')
       })
       call.on('error', err => {
+        window.clearTimeout(connectTimeout)
         setError('Koneksi audio gagal: ' + err.message)
         setMicOn(false); setConnected(false); setStatus('Gagal tersambung')
       })
@@ -136,7 +168,7 @@ export default function App() {
   return <main className="app-shell">
     <header className="topbar">
       <div className="brand"><div className="brand-icon"><AudioLines /></div><span>KARAOKE<span className="brand-accent">BASS</span></span><span className="version">BETA</span></div>
-      <div className="top-status"><span className={connected ? 'dot live' : 'dot'} />{connected ? 'PHONE CONNECTED' : 'READY TO PAIR'}</div>
+      <div className="top-status"><span className={connected ? 'dot live' : 'dot'} />{connected ? 'PHONE CONNECTED' : status.toUpperCase()}</div>
     </header>
     <section className="hero">
       <div><p className="eyebrow"><span className="pulse"/> YOUR PERSONAL KARAOKE STATION</p><h1>Feel the beat.<br/><span className="gradient">Own the mic.</span></h1><p className="hero-copy">Ubah HP jadi mikrofon wireless. Putar lagu YouTube dari laptop, nyanyi lewat HP, dan keluarkan semuanya ke speaker bass-mu.</p></div>
