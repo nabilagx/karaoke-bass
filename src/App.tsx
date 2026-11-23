@@ -31,7 +31,16 @@ export default function App() {
   const gainRef = useRef<GainNode | null>(null)
 
   useEffect(() => {
-    const peer = new Peer()
+    const peer = new Peer(undefined, {
+      debug: 2,
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun.cloudflare.com:3478' },
+        ],
+        iceCandidatePoolSize: 10,
+      },
+    })
     peerRef.current = peer
     peer.on('open', id => {
       setPeerId(id)
@@ -52,9 +61,22 @@ export default function App() {
         }
       })
       call.on('close', () => { setConnected(false); setStatus('Mic terputus') })
+      call.on('error', err => { setError('Streaming mic gagal: ' + err.message); setConnected(false); setStatus('Streaming gagal') })
       callRef.current = call
     })
-    peer.on('error', err => { setError(err.type === 'peer-unavailable' ? 'Laptop belum siap atau koneksi terputus.' : err.message); setStatus('Koneksi bermasalah') })
+    peer.on('disconnected', () => {
+      setStatus('Sinyal terputus, mencoba menyambung ulang…')
+      if (!peer.destroyed) peer.reconnect()
+    })
+    peer.on('error', err => {
+      const message = err.type === 'peer-unavailable'
+        ? 'Room laptop tidak ditemukan. Refresh halaman laptop lalu scan QR baru.'
+        : err.type === 'network'
+          ? 'Server sinyal tidak terjangkau. Coba ganti jaringan atau muat ulang.'
+          : err.message
+      setError(message)
+      setStatus('Koneksi bermasalah')
+    })
     return () => { callRef.current?.close(); streamRef.current?.getTracks().forEach(t => t.stop()); ctxRef.current?.close(); peer.destroy() }
   }, [])
 
@@ -72,7 +94,15 @@ export default function App() {
       if (!call) throw new Error('Gagal memulai panggilan.')
       callRef.current = call
       setMicOn(true); setStatus('Menghubungkan ke laptop…')
-      call.on('close', () => { setMicOn(false); setConnected(false); setStatus('Koneksi berakhir') })
+      call.on('close', () => {
+        streamRef.current?.getTracks().forEach(track => track.stop())
+        streamRef.current = null
+        setMicOn(false); setConnected(false); setStatus('Koneksi berakhir')
+      })
+      call.on('error', err => {
+        setError('Koneksi audio gagal: ' + err.message)
+        setMicOn(false); setConnected(false); setStatus('Gagal tersambung')
+      })
     } catch (e) { setError(e instanceof Error ? e.message : 'Tidak bisa mengakses mikrofon.') }
   }
   function stopMic() {
