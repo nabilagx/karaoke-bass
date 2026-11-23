@@ -22,6 +22,7 @@ export default function App() {
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState('')
   const [outputReady, setOutputReady] = useState(false)
+  const outputReadyRef = useRef(false)
   const peerRef = useRef<Peer | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const callRef = useRef<MediaConnection | null>(null)
@@ -52,13 +53,25 @@ export default function App() {
       call.answer()
       call.on('stream', stream => {
         if (audioRef.current) {
-          const ctx = new AudioContext()
+          // Build the output chain only after the incoming microphone stream exists.
+          const ctx = new AudioContext({ latencyHint: 'interactive' })
           const source = ctx.createMediaStreamSource(stream)
-          const low = ctx.createBiquadFilter(); low.type = 'lowshelf'; low.frequency.value = 120; low.gain.value = bass
-          const gain = ctx.createGain(); gain.gain.value = volume / 100
+          const low = ctx.createBiquadFilter()
+          low.type = 'lowshelf'; low.frequency.value = 120; low.gain.value = bass
+          const gain = ctx.createGain()
+          gain.gain.value = volume / 100
           source.connect(low).connect(gain).connect(ctx.destination)
           ctxRef.current = ctx; bassRef.current = low; gainRef.current = gain
-          setConnected(true); setStatus('Mic HP terhubung!')
+          ctx.onstatechange = () => {
+            const running = ctx.state === 'running'
+            setOutputReady(running)
+            setStatus(running ? 'Mic HP terhubung — audio aktif' : 'Mic terhubung — klik ENABLE AUDIO')
+          }
+          setConnected(true)
+          setOutputReady(ctx.state === 'running')
+          setStatus(ctx.state === 'running' ? 'Mic HP terhubung — audio aktif' : 'Mic terhubung — klik ENABLE AUDIO')
+          // If the user enabled output before the stream arrived, resume this new context too.
+          if (outputReadyRef.current) void ctx.resume()
         }
       })
       call.on('close', () => { setConnected(false); setStatus('Mic terputus') })
@@ -142,7 +155,26 @@ export default function App() {
     streamRef.current?.getTracks().forEach(t => t.stop())
     streamRef.current = null; setMicOn(false); setConnected(false); setStatus('Mic dimatikan')
   }
-  async function enableOutput() { await ctxRef.current?.resume(); setOutputReady(true) }
+  async function enableOutput() {
+    const ctx = ctxRef.current
+    if (!ctx) {
+      outputReadyRef.current = true
+      setOutputReady(false)
+      setError('Stream mikrofon belum diterima. Coba matikan lalu nyalakan mic HP.')
+      return
+    }
+    try {
+      await ctx.resume()
+      outputReadyRef.current = ctx.state === 'running'
+      setOutputReady(outputReadyRef.current)
+      setError(outputReadyRef.current ? '' : 'Browser belum mengaktifkan audio. Klik ENABLE AUDIO sekali lagi.')
+      setStatus(outputReadyRef.current ? 'Audio output aktif — tes bicara dari HP' : 'Audio masih tertahan browser')
+    } catch (e) {
+      outputReadyRef.current = false
+      setOutputReady(false)
+      setError('Gagal mengaktifkan output audio: ' + (e instanceof Error ? e.message : 'Browser menolak audio'))
+    }
+  }
   function copyLink() {
     navigator.clipboard.writeText(location.origin + BASE + '?join=' + peerId).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800) })
   }
