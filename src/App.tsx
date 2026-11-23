@@ -21,6 +21,7 @@ export default function App() {
   const [volume, setVolume] = useState(85)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState('')
+  const [outputReady, setOutputReady] = useState(false)
   const peerRef = useRef<Peer | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const callRef = useRef<MediaConnection | null>(null)
@@ -79,6 +80,7 @@ export default function App() {
     streamRef.current?.getTracks().forEach(t => t.stop())
     streamRef.current = null; setMicOn(false); setConnected(false); setStatus('Mic dimatikan')
   }
+  async function enableOutput() { await ctxRef.current?.resume(); setOutputReady(true) }
   function copyLink() {
     navigator.clipboard.writeText(location.origin + BASE + '?join=' + peerId).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800) })
   }
@@ -93,7 +95,7 @@ export default function App() {
       <p className="muted">Suaramu dikirim langsung ke laptop. Pastikan laptop sudah membuka Karaoke Bass.</p>
       <div className="connection"><span className={connected || micOn ? 'dot live' : 'dot'} />{status}</div>
       {error && <p className="error">{error}</p>}
-      <button className={micOn ? 'mic-button active' : 'mic-button'} onClick={micOn ? stopMic : startMic}>
+      <button className={micOn ? 'mic-button active' : 'mic-button'} disabled={!peerId && !micOn} onClick={micOn ? stopMic : startMic}>
         {micOn ? <><MicOff/> MATIKAN MIC</> : <><Mic/> MULAI MIC</>}
       </button>
       <p className="tiny">Izinkan akses mikrofon saat browser memintanya.</p>
@@ -130,7 +132,7 @@ export default function App() {
         <div className="panel-heading"><div className="panel-icon green"><Volume2/></div><div><p className="eyebrow">03 / SOUND CONTROL</p><h2>Audio mixer</h2></div></div>
         <div className="mixer-row"><div className="mixer-label"><span>BASS BOOST</span><strong>{bass > 0 ? '+' : ''}{bass} dB</strong></div><input type="range" min="0" max="15" value={bass} onChange={e=>setBass(Number(e.target.value))}/><div className="range-labels"><span>NEUTRAL</span><span>DEEP BASS</span></div></div>
         <div className="mixer-row"><div className="mixer-label"><span>MIC VOLUME</span><strong>{volume}%</strong></div><input type="range" min="0" max="150" value={volume} onChange={e=>setVolume(Number(e.target.value))}/><div className="range-labels"><span>LOW</span><span>LOUD</span></div></div>
-        <div className="output-card"><div className="output-icon"><Headphones/></div><div><b>Speaker output</b><small>Pilih speaker bass sebagai output audio laptop</small></div><span className={connected ? 'output-state on' : 'output-state'}>{connected ? 'ACTIVE' : 'WAITING'}</span></div>
+        <div className="output-card"><div className="output-icon"><Headphones/></div><div><b>Speaker output</b><small>Pilih speaker bass sebagai output audio laptop</small></div>{connected ? (outputReady ? <span className="output-state on">ACTIVE</span> : <button className="enable-output" onClick={enableOutput}>ENABLE AUDIO</button>) : <span className="output-state">WAITING</span>}</div>
       </section>
     </div>
     <footer className="bottom"><span>MADE FOR LOUD NIGHTS.</span><span><WifiOff size={13}/> AUDIO STREAM VIA WEBRTC</span></footer>
