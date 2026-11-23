@@ -111,7 +111,7 @@ export default function App() {
   async function startMic() {
     try {
       setError('')
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false, latency: { ideal: 0.01 }, channelCount: { ideal: 1 }, sampleRate: { ideal: 48000 } }, video: false })
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 1 }, sampleRate: { ideal: 48000 } }, video: false })
       streamRef.current = stream
       const peer = peerRef.current
       if (!peer || !joinId) throw new Error('Koneksi belum siap. Muat ulang halaman.')
