@@ -100,7 +100,7 @@ export default function App() {
   async function startMic() {
     try {
       setError('')
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false }, video: false })
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false }, video: false })
       streamRef.current = stream
       const peer = peerRef.current
       if (!peer || !joinId) throw new Error('Koneksi belum siap. Muat ulang halaman.')
