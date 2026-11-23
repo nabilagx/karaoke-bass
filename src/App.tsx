@@ -17,7 +17,7 @@ export default function App() {
   const [micOn, setMicOn] = useState(false)
   const [youtube, setYoutube] = useState('')
   const [video, setVideo] = useState('')
-  const [bass, setBass] = useState(65)
+  const [bass, setBass] = useState(0)
   const [volume, setVolume] = useState(85)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState('')
